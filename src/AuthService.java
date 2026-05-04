@@ -1,64 +1,57 @@
-import java.util.Scanner;
+import java.util.List;
 
 public class AuthService {
 
     private Database db;
-    private Scanner scanner = new Scanner(System.in);
 
     public AuthService(Database db) {
         this.db = db;
     }
 
-    public void cadastrarAdministrador() {
-
-        System.out.print("Email: ");
-        String email = scanner.nextLine();
-
-        System.out.print("Nome: ");
-        String nome = scanner.nextLine();
-
-        System.out.print("Senha: ");
-        String senha = scanner.nextLine();
-
-        System.out.print("Frase secreta: ");
-        String frase = scanner.nextLine();
-
-        Usuario admin = new Usuario(email, nome, senha, frase);
-
+    public void cadastrarAdministrador(String email, String nome, String senha, String frase) {
+        Usuario admin = new Usuario(email, nome, senha, frase, "admin");
         db.salvarUsuario(admin);
-
-        System.out.println("Administrador cadastrado com sucesso!");
     }
 
-    public boolean validarAdmin() {
-
+    public boolean validarAdmin(String frase) {
         Usuario admin = db.getAdmin();
-
-        System.out.print("Digite a frase secreta do admin: ");
-        String frase = scanner.nextLine();
-
+        if (admin == null) return false;
         return admin.getFraseSecreta().equals(frase);
     }
 
-    public Usuario autenticarEmail() {
-
-    System.out.print("Digite seu email: ");
-    String email = scanner.nextLine();
-
-    Usuario user = db.buscarPorEmail(email);
-
-    if (user == null) {
-        System.out.println("Usuário não encontrado.");
-        return null;
+    // Retorna o usuário se encontrado (mesmo bloqueado). Null se não existir.
+    public Usuario autenticarEmail(String email) {
+        return db.buscarPorEmail(email);
     }
 
-    if (user.isBloqueado()) {
-        System.out.println("Usuário bloqueado. Tente novamente mais tarde.");
-        return null;
+    // Valida a senha via teclado virtual: cada clique é um par de dígitos possíveis.
+    public boolean autenticarSenha(Usuario usuario, List<int[]> cliques) {
+        String senha = usuario.getSenha();
+        if (senha.length() != cliques.size()) {
+            registrarFalha(usuario);
+            return false;
+        }
+        for (int i = 0; i < senha.length(); i++) {
+            int digito = Character.getNumericValue(senha.charAt(i));
+            int[] par = cliques.get(i);
+            if (digito != par[0] && digito != par[1]) {
+                registrarFalha(usuario);
+                return false;
+            }
+        }
+        usuario.resetarFalhas();
+        return true;
     }
 
-    System.out.println("Usuário válido!");
-    return user;
-}
-}
+    // Stub: aceita qualquer código de 6 dígitos até o TOTP ser implementado.
+    public boolean autenticarTOTP(Usuario usuario, String totpCode) {
+        return totpCode.matches("\\d{6}");
+    }
 
+    private void registrarFalha(Usuario usuario) {
+        usuario.incrementarFalhas();
+        if (usuario.getFalhasLogin() >= 3) {
+            usuario.setBloqueado(true);
+        }
+    }
+}

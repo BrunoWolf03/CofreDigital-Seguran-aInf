@@ -54,12 +54,18 @@ out/
 target/
 
 # =========================
+# Dependências locais (JavaFX JARs)
+# =========================
+lib/
+
+# =========================
 # Arquivos sensíveis
 # =========================
 *.env
 *.key
 *.pem
 *.crt
+*.pdf
 
 # =========================
 # Arquivos gerados pelo projeto
