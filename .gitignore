@@ -1,0 +1,70 @@
+# =========================
+# Compilação Java
+# =========================
+*.class
+
+# =========================
+# Logs
+# =========================
+*.log
+
+# =========================
+# Arquivos de banco de dados
+# =========================
+*.db
+*.sqlite
+*.sqlite3
+
+# =========================
+# Arquivos temporários
+# =========================
+*.tmp
+*.temp
+*.swp
+*.swo
+*~
+
+# =========================
+# Sistema operacional
+# =========================
+.DS_Store
+Thumbs.db
+
+# =========================
+# IDEs
+# =========================
+
+# VS Code
+.vscode/
+
+# IntelliJ
+.idea/
+*.iml
+
+# Eclipse
+.project
+.classpath
+.settings/
+
+# =========================
+# Build folders
+# =========================
+bin/
+out/
+target/
+
+# =========================
+# Arquivos sensíveis
+# =========================
+*.env
+*.key
+*.pem
+*.crt
+
+# =========================
+# Arquivos gerados pelo projeto
+# =========================
+*.enc
+*.asd
+*.env
+index.*
