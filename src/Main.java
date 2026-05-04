@@ -26,7 +26,7 @@ public class Main {
         }
 
         // Etapa 1 - Login (email)
-        Usuario usuario = auth.loginEtapa1();
+        Usuario usuario = auth.autenticarEmail();
 
         if (usuario == null) {
             System.out.println("Falha na autenticação (etapa 1). Encerrando...");
@@ -42,6 +42,5 @@ public class Main {
         System.out.println("Indo para etapa 3 (TOTP)...");
         // auth.loginEtapa3(usuario);
 
-        System.out.println("Sistema pronto (parcialmente implementado).");
     }
 }
