@@ -7,7 +7,6 @@ public class Database {
 
     public Database() {
         try {
-            Class.forName("org.sqlite.JDBC");
             conn = DriverManager.getConnection("jdbc:sqlite:" + DB_FILE);
             conn.createStatement().execute("PRAGMA foreign_keys = ON");
             criarTabelas();

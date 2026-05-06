@@ -1,6 +1,12 @@
 2212576 - Bruno Wolf
 ??? - Guilherme Senko
 
+# compilar
+javac --module-path lib\javafx --add-modules javafx.controls,javafx.fxml -d out src\*.java
+
+# rodar
+java --module-path lib\javafx --add-modules javafx.controls,javafx.fxml -cp "out;lib\sqlite-jdbc-3.46.1.3.jar" App
+
 # 🔐 Cofre Digital
 
 Sistema desenvolvido em **Java (JDK SE)** para a disciplina **INF1416 – Segurança da Informação (PUC-Rio)**.
