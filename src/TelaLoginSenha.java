@@ -14,6 +14,7 @@ public class TelaLoginSenha {
     private int[][] teclado;
     private Label lblIndicador;
     private Label lblErro;
+    private Button[] botoes;
 
     public TelaLoginSenha(Usuario usuario) {
         this.usuario = usuario;
@@ -37,7 +38,7 @@ public class TelaLoginSenha {
         lblIndicador.setStyle("-fx-font-size: 22px; -fx-text-fill: #4a5568; -fx-letter-spacing: 4;");
 
         // Teclado virtual: 5 botões com 2 dígitos cada
-        Button[] botoes = new Button[5];
+        botoes = new Button[5];
         for (int i = 0; i < 5; i++) {
             final int idx = i;
             botoes[i] = new Button(teclado[i][0] + "   |   " + teclado[i][1]);
@@ -78,6 +79,11 @@ public class TelaLoginSenha {
         for (int i = 0; i < cliques.size(); i++) sb.append("● ");
         lblIndicador.setText(sb.toString().trim());
         lblErro.setText("");
+
+        teclado = gerarTeclado();
+        for (int i = 0; i < 5; i++) {
+            botoes[i].setText(teclado[i][0] + "   |   " + teclado[i][1]);
+        }
     }
 
     private void confirmar() {

@@ -9,7 +9,8 @@ public class AuthService {
     }
 
     public void cadastrarAdministrador(String email, String nome, String senha, String frase) {
-        Usuario admin = new Usuario(email, nome, senha, frase, "admin");
+        // totpSecret vazio por enquanto — será preenchido pela parceira no cadastro real
+        Usuario admin = new Usuario(email, nome, senha, "", frase, "admin");
         db.salvarUsuario(admin);
     }
 
