@@ -1,4 +1,6 @@
 import java.sql.*;
+import java.util.ArrayList;
+import java.util.List;
 
 public class Database {
 
@@ -32,25 +34,26 @@ public class Database {
 
         st.execute("""
             CREATE TABLE IF NOT EXISTS Usuarios (
-                UID           INTEGER PRIMARY KEY AUTOINCREMENT,
-                login_name    TEXT    NOT NULL UNIQUE,
-                nome          TEXT    NOT NULL,
-                senha_hash    TEXT    NOT NULL,
-                totp_secret   TEXT    NOT NULL,
-                GID           INTEGER NOT NULL REFERENCES Grupos(GID),
-                KID           INTEGER,
-                bloqueado     INTEGER NOT NULL DEFAULT 0,
-                falhas_login  INTEGER NOT NULL DEFAULT 0,
-                total_acessos INTEGER NOT NULL DEFAULT 0,
-                bloqueado_ate DATETIME
+                UID            INTEGER PRIMARY KEY AUTOINCREMENT,
+                login_name     TEXT    NOT NULL UNIQUE,
+                nome           TEXT    NOT NULL,
+                senha_hash     TEXT    NOT NULL,
+                totp_secret    TEXT    NOT NULL,
+                GID            INTEGER NOT NULL REFERENCES Grupos(GID),
+                KID            INTEGER,
+                bloqueado      INTEGER NOT NULL DEFAULT 0,
+                falhas_login   INTEGER NOT NULL DEFAULT 0,
+                total_acessos  INTEGER NOT NULL DEFAULT 0,
+                total_consultas INTEGER NOT NULL DEFAULT 0,
+                bloqueado_ate  DATETIME
             )""");
 
         st.execute("""
             CREATE TABLE IF NOT EXISTS Chaveiro (
-                KID          INTEGER PRIMARY KEY AUTOINCREMENT,
-                UID          INTEGER NOT NULL REFERENCES Usuarios(UID),
-                certificado  TEXT    NOT NULL,
-                chave_privada BLOB   NOT NULL
+                KID           INTEGER PRIMARY KEY AUTOINCREMENT,
+                UID           INTEGER NOT NULL REFERENCES Usuarios(UID),
+                certificado   TEXT    NOT NULL,
+                chave_privada BLOB    NOT NULL
             )""");
 
         st.execute("""
@@ -69,10 +72,6 @@ public class Database {
             )""");
     }
 
-    // -------------------------------------------------------------------------
-    // Seed: Grupos
-    // -------------------------------------------------------------------------
-
     private void popularGrupos() throws SQLException {
         conn.createStatement().execute("""
             INSERT OR IGNORE INTO Grupos (GID, nome) VALUES
@@ -80,10 +79,6 @@ public class Database {
                 (2, 'Usuario')
             """);
     }
-
-    // -------------------------------------------------------------------------
-    // Seed: Mensagens (Tabela de Mensagens de Registro do spec)
-    // -------------------------------------------------------------------------
 
     private void popularMensagens() throws SQLException {
         String sql = "INSERT OR IGNORE INTO Mensagens (MID, texto) VALUES (?, ?)";
@@ -220,21 +215,36 @@ public class Database {
         }
     }
 
+    public Usuario buscarPorUid(int uid) {
+        try {
+            PreparedStatement ps = conn.prepareStatement(
+                "SELECT * FROM Usuarios WHERE UID = ?");
+            ps.setInt(1, uid);
+            ResultSet rs = ps.executeQuery();
+            if (!rs.next()) return null;
+            return mapUsuario(rs);
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
     public void atualizarUsuario(Usuario u) {
         try {
             PreparedStatement ps = conn.prepareStatement("""
                 UPDATE Usuarios SET
-                    bloqueado     = ?,
-                    falhas_login  = ?,
-                    total_acessos = ?,
-                    bloqueado_ate = ?
+                    bloqueado       = ?,
+                    falhas_login    = ?,
+                    total_acessos   = ?,
+                    total_consultas = ?,
+                    bloqueado_ate   = ?
                 WHERE UID = ?
                 """);
             ps.setInt(1, u.isBloqueado() ? 1 : 0);
             ps.setInt(2, u.getFalhasLogin());
             ps.setInt(3, u.getTotalAcessos());
-            ps.setString(4, u.getBloqueadoAte());
-            ps.setInt(5, u.getUid());
+            ps.setInt(4, u.getTotalConsultas());
+            ps.setString(5, u.getBloqueadoAte());
+            ps.setInt(6, u.getUid());
             ps.executeUpdate();
         } catch (SQLException e) {
             throw new RuntimeException(e);
@@ -268,9 +278,32 @@ public class Database {
                 "SELECT last_insert_rowid()");
             int kid = rs.getInt(1);
 
-            conn.createStatement().execute(
-                "UPDATE Usuarios SET KID = " + kid + " WHERE UID = " + uid);
+            PreparedStatement up = conn.prepareStatement(
+                "UPDATE Usuarios SET KID = ? WHERE UID = ?");
+            up.setInt(1, kid);
+            up.setInt(2, uid);
+            up.executeUpdate();
+
             return kid;
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    public static class Chaveiro {
+        public final String certificadoPem;
+        public final byte[] chavePrivadaEnc;
+        public Chaveiro(String c, byte[] k) { certificadoPem = c; chavePrivadaEnc = k; }
+    }
+
+    public Chaveiro buscarChaveiroPorUid(int uid) {
+        try {
+            PreparedStatement ps = conn.prepareStatement(
+                "SELECT certificado, chave_privada FROM Chaveiro WHERE UID = ?");
+            ps.setInt(1, uid);
+            ResultSet rs = ps.executeQuery();
+            if (!rs.next()) return null;
+            return new Chaveiro(rs.getString(1), rs.getBytes(2));
         } catch (SQLException e) {
             throw new RuntimeException(e);
         }
@@ -301,14 +334,37 @@ public class Database {
         }
     }
 
-    public ResultSet buscarRegistrosOrdenados() throws SQLException {
-        return conn.createStatement().executeQuery("""
-            SELECT r.timestamp, r.MID, m.texto, r.UID, u.login_name, r.arq_name
-            FROM Registros r
-            JOIN Mensagens m ON r.MID = m.MID
-            LEFT JOIN Usuarios u ON r.UID = u.UID
-            ORDER BY r.timestamp ASC
-            """);
+    public static class RegistroLinha {
+        public final String timestamp;
+        public final int mid;
+        public final String texto;
+        public final String loginName;
+        public final String arqName;
+        public RegistroLinha(String ts, int mid, String txt, String ln, String an) {
+            this.timestamp = ts; this.mid = mid; this.texto = txt;
+            this.loginName = ln; this.arqName = an;
+        }
+    }
+
+    public List<RegistroLinha> listarRegistrosOrdenados() {
+        try {
+            ResultSet rs = conn.createStatement().executeQuery("""
+                SELECT r.timestamp, r.MID, m.texto, u.login_name, r.arq_name
+                FROM Registros r
+                JOIN Mensagens m ON r.MID = m.MID
+                LEFT JOIN Usuarios u ON r.UID = u.UID
+                ORDER BY r.timestamp ASC, r.RID ASC
+                """);
+            List<RegistroLinha> out = new ArrayList<>();
+            while (rs.next()) {
+                out.add(new RegistroLinha(
+                    rs.getString(1), rs.getInt(2), rs.getString(3),
+                    rs.getString(4), rs.getString(5)));
+            }
+            return out;
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
     }
 
     // -------------------------------------------------------------------------
@@ -324,9 +380,12 @@ public class Database {
             rs.getInt("GID") == 1 ? "admin" : "user"
         );
         u.setUid(rs.getInt("UID"));
+        int kid = rs.getInt("KID");
+        if (!rs.wasNull()) u.setKid(kid);
         u.setBloqueado(rs.getInt("bloqueado") == 1);
         u.setFalhasLogin(rs.getInt("falhas_login"));
         u.setTotalAcessos(rs.getInt("total_acessos"));
+        u.setTotalConsultas(rs.getInt("total_consultas"));
         u.setBloqueadoAte(rs.getString("bloqueado_ate"));
         return u;
     }

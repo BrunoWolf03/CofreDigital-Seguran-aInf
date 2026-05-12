@@ -15,11 +15,19 @@ public class App extends Application {
     @Override
     public void start(Stage stage) {
         primaryStage = stage;
-        db = new Database();
+        db   = new Database();
         auth = new AuthService(db);
 
         stage.setTitle("Cofre Digital");
         stage.setResizable(false);
+
+        db.registrarLog(1001);
+
+        stage.setOnCloseRequest(ev -> {
+            db.registrarLog(1002);
+            Sessao.limparTudo();
+            db.fechar();
+        });
 
         iniciar();
         stage.show();
@@ -27,6 +35,7 @@ public class App extends Application {
 
     static void iniciar() {
         if (!db.existeUsuario()) {
+            db.registrarLog(1005);
             navegar(new TelaCadastroAdmin().buildScene());
         } else {
             navegar(new TelaValidacaoAdmin().buildScene());
