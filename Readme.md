@@ -1,146 +1,94 @@
 2212576 - Bruno Wolf
-??? - Guilherme Senko
+2011478 - Guilherme Senko
 
-# compilar
-javac --module-path lib\javafx --add-modules javafx.controls,javafx.fxml -d out src\*.java
+# Cofre Digital - INF1416
 
-# rodar
-java --module-path lib\javafx --add-modules javafx.controls,javafx.fxml -cp "out;lib\sqlite-jdbc-3.46.1.3.jar" App
+Sistema em **Java (JDK SE)** que implementa um cofre digital com autenticacao
+multifator, criptografia simetrica e assimetrica, assinatura digital, envelope
+digital e controle de acesso por usuario.
 
-# 🔐 Cofre Digital
+## Dependencias (em `lib/`)
 
-Sistema desenvolvido em **Java (JDK SE)** para a disciplina **INF1416 – Segurança da Informação (PUC-Rio)**.
+- `javafx/` — JavaFX SDK 21
+- `bcprov-jdk18on-1.78.1.jar` — BouncyCastle (bcrypt, OpenBSDBCrypt)
+- `sqlite-jdbc-3.46.1.3.jar` — driver SQLite
+- `slf4j-api-*.jar` + `slf4j-simple-*.jar` — logging (dependencia do SQLite driver)
 
-O projeto implementa um **cofre digital seguro**, utilizando autenticação multifator, criptografia simétrica e assimétrica, assinatura digital e controle de acesso para proteção de arquivos secretos.
+## Compilar
 
----
-
-## 📚 Sobre o Projeto
-
-O Cofre Digital é uma aplicação responsável por proteger uma pasta contendo arquivos sigilosos. O sistema permite:
-
-- Cadastro de usuários
-- Login com autenticação em 3 etapas
-- Controle de grupos (Administrador / Usuário)
-- Criptografia e descriptografia de arquivos
-- Verificação de integridade e autenticidade
-- Registro de logs de auditoria
-- Consulta segura de arquivos secretos
-
----
-
-## 🔒 Recursos de Segurança Implementados
-
-### ✅ Autenticação Multifator (MFA)
-
-O login ocorre em 3 etapas:
-
-1. **Login (E-mail válido)**
-2. **Senha pessoal numérica via teclado virtual**
-3. **Token TOTP (Google Authenticator)**
-
----
-
-### 🔐 Criptografia
-
-#### Arquivos Secretos
-
-- AES/ECB/PKCS5Padding
-
-#### Chaves Privadas
-
-- Armazenadas criptografadas
-
-#### Tokens TOTP
-
-- Segredo de 160 bits codificado em Base32
-
----
-
-### ✍️ Assinatura Digital
-
-Utilizada para garantir:
-
-- Integridade
-- Autenticidade
-
-Arquivos `.asd`
-
----
-
-### 🔑 Hash de Senhas
-
-As senhas são armazenadas com:
-
-- **bcrypt**
-- versão `2y`
-- custo `08`
-
----
-
-## 🧱 Tecnologias Utilizadas
-
-- Java SE
-- SQLite / MySQL
-- JDBC
-- BouncyCastle
-- Google Authenticator
-- SHA1PRNG
-- AES
-- RSA
-- X.509 Certificates
-
----
-
-## 🗄️ Estrutura do Banco de Dados
-
-O sistema utiliza 5 tabelas:
-
-| Tabela     | Função                          |
-|------------|---------------------------------|
-| Usuarios   | Dados dos usuários              |
-| Chaveiro   | Certificados e chaves privadas  |
-| Grupos     | Perfis do sistema               |
-| Mensagens  | Códigos de logs                 |
-| Registros  | Auditoria                       |
-
----
-
-## 👤 Perfis de Usuário
-
-### Administrador
-
-Pode:
-
-- Cadastrar usuários
-- Consultar arquivos
-- Visualizar logs via `logView`
-
-### Usuário
-
-Pode:
-
-- Consultar arquivos autorizados
-- Acessar apenas arquivos próprios
-
----
-
-## 📂 Estrutura dos Arquivos Seguros
-
-| Arquivo      | Função                  |
-|--------------|--------------------------|
-| `index.enc`  | Índice criptografado     |
-| `index.env`  | Envelope digital         |
-| `index.asd`  | Assinatura digital       |
-| `arquivo.enc`| Conteúdo criptografado   |
-| `arquivo.env`| Chave protegida          |
-| `arquivo.asd`| Assinatura               |
-
----
-
-## ▶️ Como Executar
-
-### Compilar
+### macOS / Linux
 
 ```bash
-javac *.java
+javac --module-path lib/javafx/lib --add-modules javafx.controls,javafx.fxml \
+      -cp "lib/bcprov-jdk18on-1.78.1.jar:lib/sqlite-jdbc-3.46.1.3.jar" \
+      -d out src/*.java
+```
+
+### Windows
+
+```bat
+javac --module-path lib\javafx\lib --add-modules javafx.controls,javafx.fxml ^
+      -cp "lib\bcprov-jdk18on-1.78.1.jar;lib\sqlite-jdbc-3.46.1.3.jar" ^
+      -d out src\*.java
+```
+
+## Executar o Cofre Digital
+
+### macOS / Linux
+
+```bash
+java --module-path lib/javafx/lib --add-modules javafx.controls,javafx.fxml \
+     -cp "out:lib/bcprov-jdk18on-1.78.1.jar:lib/sqlite-jdbc-3.46.1.3.jar:lib/slf4j-api-2.0.13.jar:lib/slf4j-simple-2.0.13.jar" \
+     App
+```
+
+### Windows
+
+```bat
+java --module-path lib\javafx\lib --add-modules javafx.controls,javafx.fxml ^
+     -cp "out;lib\bcprov-jdk18on-1.78.1.jar;lib\sqlite-jdbc-3.46.1.3.jar;lib\slf4j-api-2.0.13.jar;lib\slf4j-simple-2.0.13.jar" ^
+     App
+```
+
+## Executar o LogView (auditoria - apenas administrador)
+
+```bash
+java -cp "out:lib/bcprov-jdk18on-1.78.1.jar:lib/sqlite-jdbc-3.46.1.3.jar:lib/slf4j-api-2.0.13.jar:lib/slf4j-simple-2.0.13.jar" \
+     LogView caminho/para/admin-pkcs8-aes.key
+```
+
+A frase secreta da chave privada e solicitada via teclado (sem echo).
+Em caso de falha de validacao, o programa encerra. Em caso de sucesso,
+imprime todos os registros em ordem cronologica.
+
+## Recursos de seguranca
+
+- **Autenticacao multifator (3 etapas)**:
+  1. Login (e-mail extraido do certificado digital)
+  2. Senha pessoal numerica (8-10 digitos) via teclado virtual sobrecarregado
+  3. Token TOTP (Google Authenticator, RFC 6238)
+- **Bloqueio de 2 minutos** apos 3 falhas consecutivas na etapa 2 ou 3
+- **bcrypt** (versao `2y`, custo `8`) para hash de senha pessoal
+- **AES/ECB/PKCS5Padding** (chave de 256 bits derivada via `SHA1PRNG`) para:
+  - Arquivos secretos (`.enc`)
+  - Chave privada PKCS8 dos usuarios (`.key`)
+  - Segredo TOTP armazenado na base
+- **RSA/ECB/PKCS1Padding** para envelope digital (`.env`)
+- **SHA1withRSA** para assinatura digital (`.asd`)
+- **Certificado X.509** lido em formato PEM; e-mail extraido do Subject DN
+- **Registro de auditoria** com ~60 mensagens semeadas na tabela `Mensagens`
+
+## Estrutura do banco de dados
+
+- `Usuarios` — UID, login_name, nome, senha_hash, totp_secret, GID, KID, falhas, bloqueio, contadores
+- `Chaveiro` — KID, UID, certificado PEM, chave privada binaria
+- `Grupos` — GID, nome (1=Administrador, 2=Usuario)
+- `Mensagens` — MID, texto
+- `Registros` — RID, timestamp, MID, UID, arq_name
+
+## Artefatos de teste
+
+`Pacote-T3/` (fornecido pelo professor):
+
+- `Keys/` — admin + user01 + user02 (X.509 + chave privada AES-encrypted)
+- `Files/` — pasta segura ja populada com `index.{enc,env,asd}` e 3 arquivos

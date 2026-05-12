@@ -3,32 +3,37 @@ import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.scene.layout.*;
 import javafx.stage.FileChooser;
-import java.nio.file.Files;
 import java.nio.file.Path;
-import java.security.cert.X509Certificate;
 
-public class TelaCadastroAdmin {
+public class TelaCadastroUsuario {
 
     public Scene buildScene() {
-        return buildSceneComDados("", "", "", "", "");
+        return buildSceneComDados("", "", "", "Usuario", "", "");
     }
 
-    public Scene buildSceneComDados(String cert, String chave, String frase, String senha, String confirma) {
+    public Scene buildSceneComDados(String cert, String chave, String frase,
+                                    String grupo, String senha, String confirma) {
+        Usuario admin = Sessao.getUsuarioAtual();
+        App.db.registrarLog(6001, admin.getUid());
+
         VBox root = UI.root();
 
-        VBox cabecalho = UI.cabecalho("COFRE DIGITAL", "Cadastro do Administrador");
+        VBox cabecalho = cabecalhoAdmin(admin);
+        VBox corpo1 = corpo1TotalUsuarios();
 
-        Label aviso = UI.subtitulo("Primeira execucao. Configure o administrador do sistema.");
-        aviso.setStyle(aviso.getStyle() + " -fx-background-color: #1e3a5f; -fx-padding: 8 12; -fx-background-radius: 6;");
+        Label titulo = new Label("Formulario de Cadastro:");
+        titulo.setStyle("-fx-font-size: 14px; -fx-font-weight: bold; -fx-text-fill: " + UI.ACCENT + ";");
 
         TextField     tfCert     = UI.campo("Caminho do certificado (.crt)");
         TextField     tfChave    = UI.campo("Caminho da chave privada (.key)");
         PasswordField pfFrase    = UI.senha("Frase secreta da chave privada");
+        ComboBox<String> cbGrupo = new ComboBox<>();
+        cbGrupo.getItems().addAll("Administrador", "Usuario");
+        cbGrupo.setValue(grupo);
+        cbGrupo.setStyle("-fx-background-color: #1e1e2e; -fx-text-fill: #f1f5f9; -fx-padding: 4 8;");
         PasswordField pfSenha    = UI.senha("Senha pessoal (8-10 digitos)");
         PasswordField pfConfirma = UI.senha("Confirmar senha pessoal");
 
-        tfCert.setMaxWidth(420);
-        tfChave.setMaxWidth(420);
         tfCert.setText(cert);
         tfChave.setText(chave);
         pfFrase.setText(frase);
@@ -39,48 +44,49 @@ public class TelaCadastroAdmin {
         Button btnEscolherChave = UI.botao("...", false);
         btnEscolherCert.setMaxWidth(50);
         btnEscolherChave.setMaxWidth(50);
-
         btnEscolherCert.setOnAction(e -> {
             FileChooser fc = new FileChooser();
-            fc.setTitle("Selecione o certificado digital");
-            fc.getExtensionFilters().add(new FileChooser.ExtensionFilter("Certificados PEM", "*.crt", "*.pem"));
             java.io.File f = fc.showOpenDialog(App.primaryStage);
             if (f != null) tfCert.setText(f.getAbsolutePath());
         });
         btnEscolherChave.setOnAction(e -> {
             FileChooser fc = new FileChooser();
-            fc.setTitle("Selecione a chave privada");
-            fc.getExtensionFilters().add(new FileChooser.ExtensionFilter("Chaves PKCS8 AES", "*.key", "*.bin"));
             java.io.File f = fc.showOpenDialog(App.primaryStage);
             if (f != null) tfChave.setText(f.getAbsolutePath());
         });
 
         HBox boxCert  = new HBox(6, tfCert,  btnEscolherCert);
         HBox boxChave = new HBox(6, tfChave, btnEscolherChave);
-        boxCert.setAlignment(Pos.CENTER_LEFT);
-        boxChave.setAlignment(Pos.CENTER_LEFT);
 
         Label lblErro = UI.erro();
-        Button btnCadastrar = UI.botao("Cadastrar Administrador", true);
+        Button btnCadastrar = UI.botao("Cadastrar", true);
+        Button btnVoltar    = UI.botao("Voltar", false);
+
+        HBox acoes = new HBox(10, btnCadastrar, btnVoltar);
+        acoes.setAlignment(Pos.CENTER);
+
+        btnVoltar.setOnAction(e -> {
+            App.db.registrarLog(6010, admin.getUid());
+            App.navegar(new TelaMenu(admin).buildScene());
+        });
 
         btnCadastrar.setOnAction(e -> {
             String pathCert  = tfCert.getText().trim();
             String pathChave = tfChave.getText().trim();
             String frasep    = pfFrase.getText();
+            String grupoSel  = cbGrupo.getValue();
             String senhap    = pfSenha.getText();
             String confirmap = pfConfirma.getText();
 
-            if (pathCert.isEmpty() || pathChave.isEmpty()) {
-                lblErro.setText("Forneca os caminhos do certificado e da chave privada.");
-                return;
-            }
-            if (frasep.isEmpty()) {
-                lblErro.setText("Frase secreta obrigatoria.");
+            App.db.registrarLog(6002, admin.getUid());
+
+            if (pathCert.isEmpty() || pathChave.isEmpty() || frasep.isEmpty()) {
+                lblErro.setText("Preencha os caminhos e a frase secreta.");
                 return;
             }
             String erroSenha = Validacoes.validarSenhaPessoal(senhap);
             if (erroSenha != null) {
-                App.db.registrarLog(6003);
+                App.db.registrarLog(6003, admin.getUid());
                 lblErro.setText(erroSenha);
                 return;
             }
@@ -89,35 +95,54 @@ public class TelaCadastroAdmin {
                 return;
             }
 
-            App.db.registrarLog(6002);
-
             AuthService.ResultadoCadastro r = App.auth.carregarECertVerificar(
                 Path.of(pathCert), Path.of(pathChave), frasep);
-
             if (!r.ok) {
-                if (r.codigoLog != null) App.db.registrarLog(r.codigoLog);
+                if (r.codigoLog != null) App.db.registrarLog(r.codigoLog, admin.getUid());
                 lblErro.setText(r.mensagemErro);
                 return;
             }
 
+            String role = "Administrador".equals(grupoSel) ? "admin" : "user";
             App.navegar(new TelaConfirmacaoCadastro(
-                r.certificado, Path.of(pathChave), frasep, senhap, "admin",
+                r.certificado, Path.of(pathChave), frasep, senhap, role,
                 pathCert, pathChave
             ).buildScene());
         });
 
         VBox form = UI.card(
+            titulo,
             rotulo("Certificado digital"), boxCert,
             rotulo("Chave privada"),       boxChave,
             rotulo("Frase secreta"),       pfFrase,
+            rotulo("Grupo"),               cbGrupo,
             rotulo("Senha pessoal"),       pfSenha,
             rotulo("Confirmacao da senha"), pfConfirma,
-            lblErro,
-            btnCadastrar
+            lblErro, acoes
         );
 
-        root.getChildren().addAll(cabecalho, aviso, form);
-        return new Scene(root, 540, 680);
+        root.getChildren().addAll(cabecalho, corpo1, form);
+        return new Scene(root, 540, 760);
+    }
+
+    private VBox cabecalhoAdmin(Usuario admin) {
+        Label l1 = info("Login", admin.getEmail());
+        Label l2 = info("Grupo", admin.getGrupoLabel());
+        Label l3 = info("Nome",  admin.getNome());
+        VBox v = new VBox(2, l1, l2, l3);
+        return v;
+    }
+
+    private VBox corpo1TotalUsuarios() {
+        Label l = new Label("Total de usuarios do sistema: " + App.db.totalUsuarios());
+        l.setStyle("-fx-font-size: 13px; -fx-text-fill: #f1f5f9;");
+        return UI.card(l);
+    }
+
+    private Label info(String chave, String valor) {
+        Label l = new Label(chave + ": " + valor);
+        l.setStyle("-fx-font-size: 12px; -fx-text-fill: #f1f5f9;");
+        return l;
     }
 
     private Label rotulo(String t) {

@@ -22,22 +22,22 @@ public class TelaLoginSenha {
     }
 
     public Scene buildScene() {
+        App.db.registrarLog(3001, usuario.getUid());
+
         VBox root = UI.root();
 
-        VBox cabecalho = UI.cabecalho("COFRE DIGITAL", "Autenticação — Etapa 2 de 3");
+        VBox cabecalho = UI.cabecalho("COFRE DIGITAL", "Autenticacao - Etapa 2 de 3");
 
         Label boasVindas = new Label("Bem-vindo(a), " + usuario.getNome());
         boasVindas.setStyle("-fx-font-size: 14px; -fx-font-weight: bold; -fx-text-fill: " + UI.ACCENT + ";");
 
         Label instrucao = UI.subtitulo(
             "Use o teclado virtual abaixo para digitar sua senha. " +
-            "Cada botão representa dois dígitos possíveis.");
+            "Cada botao representa dois digitos possiveis.");
 
-        // Indicador de dígitos digitados
-        lblIndicador = new Label("─");
+        lblIndicador = new Label("-");
         lblIndicador.setStyle("-fx-font-size: 22px; -fx-text-fill: #4a5568; -fx-letter-spacing: 4;");
 
-        // Teclado virtual: 5 botões com 2 dígitos cada
         botoes = new Button[5];
         for (int i = 0; i < 5; i++) {
             final int idx = i;
@@ -57,7 +57,7 @@ public class TelaLoginSenha {
 
         lblErro = UI.erro();
 
-        Button btnLimpar   = UI.botao("Limpar", false);
+        Button btnLimpar    = UI.botao("Limpar", false);
         Button btnConfirmar = UI.botao("Confirmar", true);
         btnLimpar.setMaxWidth(150);
         btnConfirmar.setMaxWidth(200);
@@ -70,7 +70,7 @@ public class TelaLoginSenha {
 
         VBox conteudo = UI.card(boasVindas, instrucao, lblIndicador, tecladoView, lblErro, acoes);
         root.getChildren().addAll(cabecalho, conteudo);
-        return new Scene(root, 450, 560);
+        return new Scene(root, 480, 580);
     }
 
     private void registrarClique(int idx) {
@@ -91,18 +91,36 @@ public class TelaLoginSenha {
             lblErro.setText("Digite sua senha usando o teclado virtual.");
             return;
         }
+        if (cliques.size() < 8 || cliques.size() > 10) {
+            lblErro.setText("A senha deve ter entre 8 e 10 digitos.");
+            return;
+        }
 
-        if (App.auth.autenticarSenha(usuario, cliques)) {
+        if (App.auth.verificarSenha(usuario, cliques)) {
+            App.db.registrarLog(3003, usuario.getUid());
+            App.db.registrarLog(3002, usuario.getUid());
             App.navegar(new TelaLoginTOTP(usuario).buildScene());
-        } else if (usuario.isBloqueado()) {
-            lblErro.setText("Conta bloqueada após 3 tentativas. Retornando ao login...");
+            return;
+        }
+
+        Sessao.incrementarFalhasSenha();
+        int n = Sessao.getFalhasSenhaConsecutivas();
+        int midErro = n == 1 ? 3004 : (n == 2 ? 3005 : 3006);
+        App.db.registrarLog(midErro, usuario.getUid());
+        App.auth.registrarFalhaSenha(usuario);
+
+        if (n >= 3) {
+            App.auth.bloquearPor2Minutos(usuario);
+            App.db.registrarLog(3007, usuario.getUid());
+            App.db.registrarLog(3002, usuario.getUid());
+            Sessao.resetarFalhasSenha();
+            lblErro.setText("Bloqueio de 2 minutos. Retornando ao login...");
             PauseTransition p = new PauseTransition(Duration.seconds(2));
             p.setOnFinished(e -> App.navegar(new TelaLoginEmail().buildScene()));
             p.play();
         } else {
-            int restantes = 3 - usuario.getFalhasLogin();
-            lblErro.setText("Senha incorreta. Tentativas restantes: " + restantes);
-            PauseTransition p = new PauseTransition(Duration.seconds(1.5));
+            lblErro.setText("Senha incorreta. Tentativas restantes: " + (3 - n));
+            PauseTransition p = new PauseTransition(Duration.seconds(1.2));
             p.setOnFinished(e -> App.navegar(new TelaLoginSenha(usuario).buildScene()));
             p.play();
         }
