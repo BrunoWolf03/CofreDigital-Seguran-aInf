@@ -3,7 +3,7 @@ import java.util.regex.Pattern;
 public class Validacoes {
 
     private static final Pattern EMAIL_REGEX = Pattern.compile(
-        "^[\\w.+\\-]+@[\\w\\-]+\\.[a-zA-Z]{2,}$");
+        "^[\\w.+\\-]+@[\\w\\-]+(\\.[\\w\\-]+)*\\.[a-zA-Z]{2,}$");
 
     public static boolean emailValido(String email) {
         return email != null && EMAIL_REGEX.matcher(email).matches();

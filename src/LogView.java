@@ -6,11 +6,15 @@ import java.security.PublicKey;
 import java.security.SecureRandom;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
-import java.util.List;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.ResultSet;
+import java.sql.Statement;
 
 public class LogView {
 
     private static final int CHALLENGE_BYTES = 2048;
+    private static final String DB_URL = "jdbc:sqlite:file:cofre.db?mode=ro&immutable=0&cache=shared";
 
     public static void main(String[] args) throws Exception {
         if (args.length < 1) {
@@ -25,17 +29,21 @@ public class LogView {
 
         String frase = lerFraseSecreta();
 
-        Database db = new Database();
-        try {
-            Usuario admin = db.getAdmin();
-            if (admin == null || admin.getKid() == null) {
-                System.err.println("Nao existe administrador cadastrado no sistema.");
-                System.exit(1);
-            }
-            Database.Chaveiro ch = db.buscarChaveiroPorUid(admin.getUid());
-            if (ch == null) {
-                System.err.println("Chaveiro do administrador nao encontrado.");
-                System.exit(1);
+        try (Connection conn = DriverManager.getConnection(DB_URL)) {
+            // Localiza administrador
+            int adminUid;
+            String certPem;
+            try (Statement st = conn.createStatement();
+                 ResultSet rs = st.executeQuery(
+                    "SELECT u.UID, c.certificado FROM Usuarios u " +
+                    "JOIN Chaveiro c ON c.UID = u.UID " +
+                    "WHERE u.GID = 1 LIMIT 1")) {
+                if (!rs.next()) {
+                    System.err.println("Nao existe administrador cadastrado no sistema.");
+                    System.exit(1); return;
+                }
+                adminUid = rs.getInt(1);
+                certPem  = rs.getString(2);
             }
 
             PrivateKey priv;
@@ -48,7 +56,7 @@ public class LogView {
 
             X509Certificate cert = (X509Certificate)
                 CertificateFactory.getInstance("X.509")
-                .generateCertificate(new java.io.ByteArrayInputStream(ch.certificadoPem.getBytes()));
+                .generateCertificate(new java.io.ByteArrayInputStream(certPem.getBytes()));
             PublicKey pub = cert.getPublicKey();
 
             byte[] desafio = new byte[CHALLENGE_BYTES];
@@ -59,15 +67,30 @@ public class LogView {
                 System.exit(1);
             }
 
-            List<Database.RegistroLinha> registros = db.listarRegistrosOrdenados();
-            for (Database.RegistroLinha r : registros) {
-                String texto = r.texto;
-                if (r.loginName != null) texto = texto.replace("<login_name>", r.loginName);
-                if (r.arqName  != null)  texto = texto.replace("<arq_name>",   r.arqName);
-                System.out.printf("%s  [%04d]  %s%n", r.timestamp, r.mid, texto);
+            String sql = """
+                SELECT r.timestamp, r.MID, m.texto, u.login_name, r.arq_name
+                FROM Registros r
+                JOIN Mensagens m ON r.MID = m.MID
+                LEFT JOIN Usuarios u ON r.UID = u.UID
+                ORDER BY r.timestamp ASC, r.RID ASC
+                """;
+            try (Statement st = conn.createStatement();
+                 ResultSet rs = st.executeQuery(sql)) {
+                while (rs.next()) {
+                    String ts        = rs.getString(1);
+                    int    mid       = rs.getInt(2);
+                    String texto     = rs.getString(3);
+                    String loginName = rs.getString(4);
+                    String arqName   = rs.getString(5);
+
+                    if (loginName != null) texto = texto.replace("<login_name>", loginName);
+                    if (arqName   != null) texto = texto.replace("<arq_name>",   arqName);
+                    System.out.printf("%s  [%04d]  %s%n", ts, mid, texto);
+                }
             }
-        } finally {
-            db.fechar();
+
+            // referencia para nao deixar warning unused
+            if (adminUid < 0) System.err.println("uid=" + adminUid);
         }
     }
 
@@ -78,7 +101,6 @@ public class LogView {
             if (pass == null) return "";
             return new String(pass);
         }
-        // Fallback para execucao em IDEs sem TTY
         System.out.print("Frase secreta (visivel - sem TTY): ");
         try {
             byte[] buf = new byte[1024];
