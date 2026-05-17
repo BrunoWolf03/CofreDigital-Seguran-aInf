@@ -20,10 +20,6 @@ public class CryptoUtils {
     private static final String RSA_TRANSFORM = "RSA/ECB/PKCS1Padding";
     private static final String SIG_ALGORITHM = "SHA1withRSA";
 
-    // ============================================================
-    // Derivação de chave AES a partir de string (SHA1PRNG)
-    // ============================================================
-
     public static SecretKey deriveAesKey(String segredo) {
         return deriveAesKey(segredo.getBytes());
     }
@@ -39,10 +35,6 @@ public class CryptoUtils {
             throw new RuntimeException("Erro ao derivar chave AES", e);
         }
     }
-
-    // ============================================================
-    // AES/ECB/PKCS5
-    // ============================================================
 
     public static byte[] aesEncrypt(byte[] plain, SecretKey k) {
         try {
@@ -60,10 +52,6 @@ public class CryptoUtils {
         return c.doFinal(cipherText);
     }
 
-    // ============================================================
-    // RSA/ECB/PKCS1 (envelopes digitais)
-    // ============================================================
-
     public static byte[] rsaEncrypt(byte[] data, PublicKey pk) {
         try {
             Cipher c = Cipher.getInstance(RSA_TRANSFORM);
@@ -79,10 +67,6 @@ public class CryptoUtils {
         c.init(Cipher.DECRYPT_MODE, pk);
         return c.doFinal(data);
     }
-
-    // ============================================================
-    // Assinatura SHA1withRSA
-    // ============================================================
 
     public static byte[] assinar(byte[] dados, PrivateKey priv) {
         try {
@@ -106,10 +90,6 @@ public class CryptoUtils {
         }
     }
 
-    // ============================================================
-    // Carregar certificado X.509 PEM
-    // ============================================================
-
     public static X509Certificate carregarCertificado(Path arquivo) throws Exception {
         byte[] bytes = Files.readAllBytes(arquivo);
         CertificateFactory cf = CertificateFactory.getInstance("X.509");
@@ -120,14 +100,6 @@ public class CryptoUtils {
         String b64 = Base64.getMimeEncoder(64, "\n".getBytes()).encodeToString(cert.getEncoded());
         return "-----BEGIN CERTIFICATE-----\n" + b64 + "\n-----END CERTIFICATE-----\n";
     }
-
-    // ============================================================
-    // Carregar chave privada PKCS8 AES-encrypted
-    //   1. lê binario
-    //   2. AES/ECB/PKCS5 decrypt  -> string ASCII em formato PEM
-    //   3. extrai BASE64 entre BEGIN/END
-    //   4. PKCS8EncodedKeySpec -> KeyFactory(RSA)
-    // ============================================================
 
     private static final Pattern PEM_PRIVATE_KEY = Pattern.compile(
         "-----BEGIN PRIVATE KEY-----(.*?)-----END PRIVATE KEY-----",
@@ -142,14 +114,11 @@ public class CryptoUtils {
         Matcher m = PEM_PRIVATE_KEY.matcher(pem);
         if (!m.find()) throw new Exception("Conteudo nao esta no formato PKCS8 PEM esperado");
 
+        // getMimeDecoder (e nao getDecoder) por causa das quebras de linha do PEM
         byte[] pkcs8 = Base64.getMimeDecoder().decode(m.group(1));
         PKCS8EncodedKeySpec spec = new PKCS8EncodedKeySpec(pkcs8);
         return KeyFactory.getInstance("RSA").generatePrivate(spec);
     }
-
-    // ============================================================
-    // Campos do certificado (para tela de confirmação)
-    // ============================================================
 
     public static Map<String, String> camposDoCertificado(X509Certificate c) {
         Map<String, String> m = new LinkedHashMap<>();
@@ -174,6 +143,7 @@ public class CryptoUtils {
         Matcher m = Pattern.compile("(?:1\\.2\\.840\\.113549\\.1\\.9\\.1|EMAILADDRESS|EmailAddress|E)=#?([^,]+)").matcher(subject);
         if (m.find()) {
             String v = m.group(1).trim();
+            // alguns certs (incluindo os do Pacote-T3) trazem o email em IA5 hex
             if (v.startsWith("16")) return decodeIA5(v);
             return v;
         }
@@ -203,10 +173,6 @@ public class CryptoUtils {
         }
     }
 
-    // ============================================================
-    // bcrypt 2y, custo 8 (via BouncyCastle)
-    // ============================================================
-
     public static String bcryptHash(String senha) {
         byte[] salt = new byte[16];
         new SecureRandom().nextBytes(salt);
@@ -223,10 +189,6 @@ public class CryptoUtils {
         }
     }
 
-    // ============================================================
-    // Cifrar/decifrar TOTP secret BASE32 com chave derivada da senha
-    // ============================================================
-
     public static String cifrarTotpSecret(String base32, String senhaPlana) {
         SecretKey k = deriveAesKey(senhaPlana);
         byte[] enc = aesEncrypt(base32.getBytes(), k);
@@ -238,10 +200,6 @@ public class CryptoUtils {
         byte[] cifr = Base64.getDecoder().decode(armazenado);
         return new String(aesDecrypt(cifr, k));
     }
-
-    // ============================================================
-    // Gera segredo TOTP de 20 bytes em BASE32
-    // ============================================================
 
     public static String gerarTotpSecretBase32() {
         byte[] secret = new byte[20];

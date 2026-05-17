@@ -30,20 +30,17 @@ public class LogView {
         String frase = lerFraseSecreta();
 
         try (Connection conn = DriverManager.getConnection(DB_URL)) {
-            // Localiza administrador
-            int adminUid;
             String certPem;
             try (Statement st = conn.createStatement();
                  ResultSet rs = st.executeQuery(
-                    "SELECT u.UID, c.certificado FROM Usuarios u " +
+                    "SELECT c.certificado FROM Usuarios u " +
                     "JOIN Chaveiro c ON c.UID = u.UID " +
                     "WHERE u.GID = 1 LIMIT 1")) {
                 if (!rs.next()) {
                     System.err.println("Nao existe administrador cadastrado no sistema.");
                     System.exit(1); return;
                 }
-                adminUid = rs.getInt(1);
-                certPem  = rs.getString(2);
+                certPem = rs.getString(1);
             }
 
             PrivateKey priv;
@@ -88,9 +85,6 @@ public class LogView {
                     System.out.printf("%s  [%04d]  %s%n", ts, mid, texto);
                 }
             }
-
-            // referencia para nao deixar warning unused
-            if (adminUid < 0) System.err.println("uid=" + adminUid);
         }
     }
 

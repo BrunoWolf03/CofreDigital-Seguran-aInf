@@ -73,6 +73,20 @@ class UI {
         return h;
     }
 
+    static void alertaIntegridade(String tituloTexto, String mensagem) {
+        Alert a = new Alert(Alert.AlertType.ERROR);
+        a.setTitle("ALERTA DE SEGURANCA");
+        a.setHeaderText(tituloTexto);
+        a.setContentText(mensagem);
+        a.getDialogPane().setStyle(
+            "-fx-background-color: #2a0a0a; " +
+            "-fx-border-color: " + DANGER + "; -fx-border-width: 2; " +
+            "-fx-text-fill: #f1f5f9;");
+        a.getDialogPane().lookupAll(".label").forEach(n ->
+            n.setStyle("-fx-text-fill: #f1f5f9; -fx-font-weight: bold;"));
+        a.showAndWait();
+    }
+
     private static String estiloInput() {
         return "-fx-background-color: #1e1e2e; -fx-text-fill: #f1f5f9; " +
                "-fx-prompt-text-fill: #475569; -fx-border-color: #3f3f5f; " +

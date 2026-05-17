@@ -12,6 +12,7 @@ public class Usuario {
     private int     falhasLogin;
     private int     totalAcessos;
     private int     totalConsultas;
+    private String  ultimoTotp;
 
     public Usuario(String email, String nome, String senhaHash,
                    String totpSecret, String role) {
@@ -34,6 +35,7 @@ public class Usuario {
     public int     getFalhasLogin()   { return falhasLogin; }
     public int     getTotalAcessos()  { return totalAcessos; }
     public int     getTotalConsultas(){ return totalConsultas; }
+    public String  getUltimoTotp()    { return ultimoTotp; }
     public boolean isAdmin()          { return "admin".equals(role); }
     public String  getGrupoLabel()    { return isAdmin() ? "Administrador" : "Usuario"; }
 
@@ -46,6 +48,7 @@ public class Usuario {
     public void setFalhasLogin(int n)          { this.falhasLogin = n; }
     public void setTotalAcessos(int n)         { this.totalAcessos = n; }
     public void setTotalConsultas(int n)       { this.totalConsultas = n; }
+    public void setUltimoTotp(String s)        { this.ultimoTotp = s; }
 
     public void incrementarFalhas()   { falhasLogin++; }
     public void resetarFalhas()       { falhasLogin = 0; }

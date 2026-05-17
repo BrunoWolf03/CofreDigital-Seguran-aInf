@@ -12,16 +12,13 @@ public class Database {
             conn = DriverManager.getConnection("jdbc:sqlite:" + DB_FILE);
             conn.createStatement().execute("PRAGMA foreign_keys = ON");
             criarTabelas();
+            migrarSchema();
             popularGrupos();
             popularMensagens();
         } catch (Exception e) {
             throw new RuntimeException("Erro ao inicializar banco de dados: " + e.getMessage(), e);
         }
     }
-
-    // -------------------------------------------------------------------------
-    // Schema
-    // -------------------------------------------------------------------------
 
     private void criarTabelas() throws SQLException {
         Statement st = conn.createStatement();
@@ -45,7 +42,8 @@ public class Database {
                 falhas_login   INTEGER NOT NULL DEFAULT 0,
                 total_acessos  INTEGER NOT NULL DEFAULT 0,
                 total_consultas INTEGER NOT NULL DEFAULT 0,
-                bloqueado_ate  DATETIME
+                bloqueado_ate  DATETIME,
+                ultimo_totp    TEXT
             )""");
 
         st.execute("""
@@ -70,6 +68,15 @@ public class Database {
                 UID       INTEGER  REFERENCES Usuarios(UID),
                 arq_name  TEXT
             )""");
+    }
+
+    // SQLite nao tem ADD COLUMN IF NOT EXISTS; o catch trata o caso de o
+    // banco ja ter sido criado depois da adicao da coluna.
+    private void migrarSchema() {
+        try {
+            conn.createStatement().execute(
+                "ALTER TABLE Usuarios ADD COLUMN ultimo_totp TEXT");
+        } catch (SQLException ignored) {}
     }
 
     private void popularGrupos() throws SQLException {
@@ -154,10 +161,6 @@ public class Database {
         ps.executeBatch();
     }
 
-    // -------------------------------------------------------------------------
-    // Usuarios
-    // -------------------------------------------------------------------------
-
     public boolean existeUsuario() {
         try {
             ResultSet rs = conn.createStatement().executeQuery(
@@ -236,7 +239,8 @@ public class Database {
                     falhas_login    = ?,
                     total_acessos   = ?,
                     total_consultas = ?,
-                    bloqueado_ate   = ?
+                    bloqueado_ate   = ?,
+                    ultimo_totp     = ?
                 WHERE UID = ?
                 """);
             ps.setInt(1, u.isBloqueado() ? 1 : 0);
@@ -244,7 +248,8 @@ public class Database {
             ps.setInt(3, u.getTotalAcessos());
             ps.setInt(4, u.getTotalConsultas());
             ps.setString(5, u.getBloqueadoAte());
-            ps.setInt(6, u.getUid());
+            ps.setString(6, u.getUltimoTotp());
+            ps.setInt(7, u.getUid());
             ps.executeUpdate();
         } catch (SQLException e) {
             throw new RuntimeException(e);
@@ -260,10 +265,6 @@ public class Database {
             throw new RuntimeException(e);
         }
     }
-
-    // -------------------------------------------------------------------------
-    // Chaveiro
-    // -------------------------------------------------------------------------
 
     public int salvarChaveiro(int uid, String certificadoPem, byte[] chavePrivadaEnc) {
         try {
@@ -308,10 +309,6 @@ public class Database {
             throw new RuntimeException(e);
         }
     }
-
-    // -------------------------------------------------------------------------
-    // Registros (log)
-    // -------------------------------------------------------------------------
 
     public void registrarLog(int mid) {
         registrarLog(mid, null, null);
@@ -367,10 +364,6 @@ public class Database {
         }
     }
 
-    // -------------------------------------------------------------------------
-    // Helpers
-    // -------------------------------------------------------------------------
-
     private Usuario mapUsuario(ResultSet rs) throws SQLException {
         Usuario u = new Usuario(
             rs.getString("login_name"),
@@ -387,6 +380,7 @@ public class Database {
         u.setTotalAcessos(rs.getInt("total_acessos"));
         u.setTotalConsultas(rs.getInt("total_consultas"));
         u.setBloqueadoAte(rs.getString("bloqueado_ate"));
+        u.setUltimoTotp(rs.getString("ultimo_totp"));
         return u;
     }
 

@@ -106,7 +106,6 @@ public class TelaConsultaPasta {
                 return;
             }
 
-            // valida frase do usuario corrente
             try {
                 Database.Chaveiro ch = App.db.buscarChaveiroPorUid(u.getUid());
                 Path tmp = Files.createTempFile("uk", ".bin");
@@ -143,12 +142,33 @@ public class TelaConsultaPasta {
                 lblErro.setText("");
             } catch (Exception ex) {
                 String m = ex.getMessage() == null ? "" : ex.getMessage().toLowerCase();
-                if (m.contains("signature") || m.contains("verif")) {
+                if (ex instanceof SecurityException) {
+                    App.db.registrarLog(7008, u.getUid());
+                    lblErro.setText("Conteudo do indice invalido.");
+                    UI.alertaIntegridade(
+                        "Indice corrompido ou adulterado",
+                        "Nome de codigo invalido detectado no indice. " +
+                        "O arquivo pode ter sido modificado por um atacante.\n\n" +
+                        "Detalhes: " + ex.getMessage());
+                } else if (m.contains("signature") || m.contains("verif")) {
                     App.db.registrarLog(7008, u.getUid());
                     lblErro.setText("Falha na verificacao do indice.");
+                    UI.alertaIntegridade(
+                        "Assinatura do indice INVALIDA",
+                        "A assinatura digital do arquivo index.asd nao confere " +
+                        "com a chave publica do administrador.\n\n" +
+                        "Isso significa que o arquivo index.enc ou index.asd " +
+                        "foi alterado depois de assinado, ou nao foi assinado " +
+                        "pelo administrador correto.");
                 } else {
                     App.db.registrarLog(7007, u.getUid());
-                    lblErro.setText("Falha na decriptacao do indice: " + ex.getMessage());
+                    lblErro.setText("Falha na decriptacao do indice.");
+                    UI.alertaIntegridade(
+                        "Falha ao decifrar o indice",
+                        "O arquivo index.enc nao pode ser decifrado. " +
+                        "Possiveis causas: arquivo corrompido, chave do envelope " +
+                        "errada, ou tentativa de adulteracao.\n\n" +
+                        "Detalhes: " + ex.getMessage());
                 }
             }
         });
@@ -172,7 +192,6 @@ public class TelaConsultaPasta {
                 Path pasta = Path.of(tfPasta.getText().trim());
                 String frase = pfFrase.getText();
 
-                // chave privada e cert do DONO do arquivo
                 Usuario dono = App.db.buscarPorEmail(sel.getDono());
                 Database.Chaveiro chDono = App.db.buscarChaveiroPorUid(dono.getUid());
 
@@ -202,6 +221,12 @@ public class TelaConsultaPasta {
                 } catch (Exception decEx) {
                     App.db.registrarLog(7015, u.getUid(), sel.getNomeCodigo());
                     lblErro.setText("Falha na decriptacao do arquivo.");
+                    UI.alertaIntegridade(
+                        "Falha ao decifrar " + sel.getNomeCodigo() + ".enc",
+                        "O arquivo nao pode ser decifrado com a chave do envelope. " +
+                        "Possiveis causas: arquivo .enc corrompido, .env adulterado, " +
+                        "ou tentativa de adulteracao deliberada.\n\n" +
+                        "Detalhes: " + decEx.getMessage());
                     return;
                 }
                 App.db.registrarLog(7013, u.getUid(), sel.getNomeCodigo());
@@ -210,6 +235,12 @@ public class TelaConsultaPasta {
                 if (!CryptoUtils.verificar(plano, sig, certDono.getPublicKey())) {
                     App.db.registrarLog(7016, u.getUid(), sel.getNomeCodigo());
                     lblErro.setText("Falha na verificacao de assinatura.");
+                    UI.alertaIntegridade(
+                        "Assinatura de " + sel.getNomeCodigo() + ".asd INVALIDA",
+                        "A assinatura digital do arquivo nao confere com a chave " +
+                        "publica do dono (" + sel.getDono() + ").\n\n" +
+                        "Isso significa que o arquivo .enc ou .asd foi adulterado, " +
+                        "ou nao foi assinado pelo dono legitimo.");
                     return;
                 }
                 App.db.registrarLog(7014, u.getUid(), sel.getNomeCodigo());
@@ -238,12 +269,6 @@ public class TelaConsultaPasta {
         root.getChildren().addAll(cabecalho, corpo1, corpo2);
         return new Scene(root, 720, 720);
     }
-
-    // ============================================================
-    // Abre index.env (Kpriv admin) -> seed -> K_AES
-    //                  -> decrypt index.enc -> texto
-    // verifica index.asd com Kpub admin sobre o texto plano
-    // ============================================================
 
     private List<LinhaIndice> lerIndice(Path pasta, Usuario corrente) throws Exception {
         Path indexEnv = pasta.resolve("index.env");
@@ -284,6 +309,11 @@ public class TelaConsultaPasta {
             if (l.trim().isEmpty()) continue;
             String[] partes = l.trim().split("\\s+");
             if (partes.length < 4) continue;
+            // spec exige alfanumerico; tambem evita path traversal
+            if (!partes[0].matches("[A-Za-z0-9]+")) {
+                throw new SecurityException(
+                    "Nome de codigo invalido no indice: '" + partes[0] + "'");
+            }
             out.add(new LinhaIndice(partes[0], partes[1], partes[2], partes[3]));
         }
         return out;

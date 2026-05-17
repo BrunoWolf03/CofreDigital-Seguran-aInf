@@ -20,13 +20,6 @@ public class AuthService {
         this.db = db;
     }
 
-    // ============================================================
-    // Validação da chave privada do administrador (partida normal)
-    //   - decifra a chave privada com a frase
-    //   - assina array aleatório de 9216 bytes
-    //   - verifica com a chave pública do certificado armazenado
-    // ============================================================
-
     public boolean validarChavePrivadaAdmin(String frase) {
         Usuario admin = db.getAdmin();
         if (admin == null || admin.getKid() == null) return false;
@@ -63,11 +56,6 @@ public class AuthService {
         }
     }
 
-    // ============================================================
-    // Etapa 1 — identificação por e-mail
-    //   Faz auto-desbloqueio se o tempo de bloqueio passou.
-    // ============================================================
-
     public Usuario identificar(String email) {
         Usuario u = db.buscarPorEmail(email);
         if (u == null) return null;
@@ -86,13 +74,8 @@ public class AuthService {
         return u;
     }
 
-    // ============================================================
-    // Etapa 2 — verificação da senha pessoal (brute-force tree)
-    //   cliques: lista de pares [a,b] (cada botão tem 2 dígitos)
-    //   Retorna true se alguma combinação 2^N passar no bcrypt.
-    //   Guarda a senha plana descoberta em Sessao para a etapa 3.
-    // ============================================================
-
+    // bcrypt eh one-way entao precisamos testar todas as 2^N combinacoes
+    // dos pares clicados ate alguma bater. Para 10 digitos = 1024 tentativas.
     public boolean verificarSenha(Usuario u, List<int[]> cliques) {
         String hash = u.getSenhaHash();
         char[] atual = new char[cliques.size()];
@@ -118,27 +101,24 @@ public class AuthService {
         return null;
     }
 
-    // ============================================================
-    // Etapa 3 — verificação do TOTP
-    //   Decifra totp_secret com K_AES derivado da senha plana
-    //   guardada na sessão; instancia TOTP e valida (±30s).
-    // ============================================================
-
     public boolean verificarTOTP(Usuario u, String codigo) {
         try {
             String senha = Sessao.getSenhaPlanaTemp();
             if (senha == null) return false;
+
+            if (codigo.equals(u.getUltimoTotp())) return false;
+
             String base32 = CryptoUtils.decifrarTotpSecret(u.getTotpSecret(), senha);
             TOTP totp = new TOTP(base32, 30);
-            return totp.validateCode(codigo);
+            if (!totp.validateCode(codigo)) return false;
+
+            u.setUltimoTotp(codigo);
+            db.atualizarUsuario(u);
+            return true;
         } catch (Exception e) {
             return false;
         }
     }
-
-    // ============================================================
-    // Bloqueio temporal
-    // ============================================================
 
     public void registrarFalhaSenha(Usuario u) {
         u.incrementarFalhas();
@@ -157,16 +137,10 @@ public class AuthService {
         db.atualizarUsuario(u);
     }
 
-    // ============================================================
-    // Cadastro de usuário (admin ou comum)
-    //   Recebe os caminhos do cert e da chave; faz toda a validação
-    //   e persiste tudo. Retorna o Usuario salvo ou null em erro.
-    // ============================================================
-
     public static class ResultadoCadastro {
         public final boolean ok;
         public final String  mensagemErro;
-        public final Integer codigoLog;   // MID a registrar (ex: 6004..6007)
+        public final Integer codigoLog;
         public final Usuario usuario;
         public final X509Certificate certificado;
         public final String  totpBase32;
@@ -197,6 +171,16 @@ public class AuthService {
             return ResultadoCadastro.erro(6004, "Certificado nao pode ser carregado: " + e.getMessage());
         }
 
+        try {
+            cert.checkValidity();
+        } catch (java.security.cert.CertificateExpiredException e) {
+            return ResultadoCadastro.erro(6004,
+                "Certificado expirado em " + cert.getNotAfter() + ".");
+        } catch (java.security.cert.CertificateNotYetValidException e) {
+            return ResultadoCadastro.erro(6004,
+                "Certificado ainda nao e valido (valido a partir de " + cert.getNotBefore() + ").");
+        }
+
         if (caminhoKey == null || !caminhoKey.toFile().exists()) {
             return ResultadoCadastro.erro(6005, "Caminho da chave privada invalido.");
         }
@@ -206,6 +190,7 @@ public class AuthService {
         } catch (javax.crypto.BadPaddingException | javax.crypto.IllegalBlockSizeException bad) {
             return ResultadoCadastro.erro(6006, "Frase secreta invalida.");
         } catch (Exception e) {
+            // BadPadding nem sempre vem direto - as vezes envolto em outra excecao
             String m = e.getMessage() == null ? "" : e.getMessage().toLowerCase();
             if (m.contains("padding") || m.contains("block") || m.contains("pkcs8"))
                 return ResultadoCadastro.erro(6006, "Frase secreta invalida.");
